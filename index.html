@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.common.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        #chart-container {
+            position: relative;
+            height: 90vh;
+            overflow: hidden;
+        }
+
+        .form-group {
+            margin: 20px;
+        }
+
+        .btn {
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <form id="csvForm">
+        <div class="form-group">
+            <label for="file">Select CSV file:</label>
+            <input type="file" id="file" name="file">
+        </div>
+        <button type="submit" class="btn btn-primary">Submit</button>
+    </form>
+
+    <div id="chart-container"></div>
+
+    <script>
+        document.getElementById('csvForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('file');
+            const file = fileInput.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    const csvContent = event.target.result;
+                    const parsedData = parseCsv(csvContent);
+                    const processedData = processData(parsedData);
+                    renderChart(processedData);
+                };
+                reader.readAsText(file);
+            } else {
+                alert("Please select a CSV file.");
+            }
+        });
+
+        function parseCsv(content) {
+            const rows = content.split('\n').filter(row => row.trim() !== '');
+            const headers = rows.shift().split(',');
+
+            return rows.map(row => {
+                const columns = row.split(',');
+                return {
+                    Timestamp: columns[0].trim(),
+                    SensorName: columns[1].trim(),
+                    Description: columns[2].trim(),
+                    Temperature: columns[3].trim()
+                };
+            });
+        }
+
+        function processData(csvData) {
+            const sensorList = [...new Set(csvData.map(x => `${x.SensorName} (${x.Description})`))];
+            const timeList = [...new Set(csvData.map(x => x.Timestamp))];
+            const itemList = sensorList.map(sensor => {
+                const tempList = csvData
+                    .filter(x => `${x.SensorName} (${x.Description})` === sensor)
+                    .map(x => x.Temperature);
+                return { name: sensor, tempList };
+            });
+
+            return { sensorList, timeList, itemList };
+        }
+
+        function renderChart(data) {
+            const dom = document.getElementById('chart-container');
+            const myChart = echarts.init(dom, null, { renderer: 'canvas', useDirtyRect: false });
+
+            const option = {
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                legend: { data: data.sensorList },
+                toolbox: { show: true, orient: 'vertical', left: 'right', top: 'center' },
+                xAxis: [{ type: 'category', axisTick: { show: false }, data: data.timeList }],
+                yAxis: [{ type: 'value' }],
+                dataZoom: [
+                    { type: 'slider', start: 0, end: 100, xAxisIndex: 0 },
+                    { type: 'inside', xAxisIndex: 0 },
+                    { type: 'slider', start: 0, end: 100, yAxisIndex: 0 },
+                    { type: 'inside', yAxisIndex: 0 }
+                ],
+                series: data.itemList.map(sensor => ({
+                    name: sensor.name,
+                    type: 'bar',
+                    label: {
+                        show: true,
+                        position: 'insideBottom',
+                        distance: 15,
+                        align: 'left',
+                        verticalAlign: 'middle',
+                        rotate: 90,
+                        formatter: '{c}  {name|{a}}',
+                        fontSize: 16,
+                        rich: { name: {} }
+                    },
+                    emphasis: { focus: 'series' },
+                    data: sensor.tempList
+                }))
+            };
+
+            myChart.setOption(option);
+            window.addEventListener('resize', myChart.resize);
+        }
+    </script>
+</body>
+</html>
